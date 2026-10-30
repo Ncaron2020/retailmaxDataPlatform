@@ -1,0 +1,108 @@
+# Configuración del generador de datos sintéticos de RetailMax.
+
+semilla: 42
+
+# Período de historia (más de 12 meses)
+periodo:
+  fecha_inicio: "2025-10-01"
+  fecha_fin: "2026-10-28"
+
+# ------------------------------------------------------------
+#   MSTR_ARTICULOS 5.000 | MSTR_PROVEEDORES 800 | MSTR_TIENDAS 150 | CRM_MIEMBROS 50.000
+#   TRANS_VENTAS 1.000.000 | INV_STOCK_DIARIO 750.000 | POST_DEVOLUCIONES 50.000
+# ------------------------------------------------------------
+maestros:
+  proveedores: 800
+  articulos: 5000
+  tiendas: 150
+  miembros: 50000
+  paises: [CO, MX, CL, PE, EC]
+
+# ------------------------------------------------------------
+# Ventas
+# ------------------------------------------------------------
+ventas:
+  transacciones: 320000            # tickets; cada uno tiene varias líneas (~1.12 M líneas en total)
+  lineas_por_transaccion: [1, 6]   # mínimo y máximo de artículos por ticket
+  pct_anonimas: 0.30               # ventas sin id_miembro (cliente no registrado)
+  canales:                         # canal: probabilidad (suman 1)
+    tienda_fisica: 0.65
+    web: 0.20
+    app: 0.15
+  tipos_pago:
+    tarjeta_credito: 0.40
+    tarjeta_debito: 0.30
+    efectivo: 0.20
+    billetera_digital: 0.10
+  pct_con_descuento: 0.25          # líneas con descuento
+  descuento_max_pct: 0.30          # el descuento nunca supera el 30% del precio
+  estacionalidad:                  # multiplicador de volumen por mes (1.0 = normal)
+    11: 1.3                        # noviembre: Black Friday
+    12: 1.6                        # diciembre: Navidad
+    1: 0.8                         # enero: baja después de fiestas
+  fin_de_semana: 1.25              # sábados y domingos venden más
+
+# ------------------------------------------------------------
+# Visitas (tabla adicional TRAF_VISITAS, no incluida en el PDF)
+# El PDF pide la tasa de conversión (compradores / visitantes), pero ninguna
+# tabla de origen registra visitas. Se simula el tráfico por día, tienda y canal:
+#   tienda_fisica = contador de personas en la entrada
+#   web / app     = sesiones registradas por la analítica digital
+# Las visitas se derivan de los tickets reales: visitas = tickets / tasa_conversion,
+# con algo de ruido para que no sea exacto.
+# ------------------------------------------------------------
+visitas:
+  tasa_conversion:                 # proporción de visitas que terminan en compra
+    tienda_fisica: 0.25
+    web: 0.03
+    app: 0.05
+  ruido_pct: 0.15                  # variación aleatoria de ±15% sobre la tasa
+
+# ------------------------------------------------------------
+# Inventario diario
+# Un snapshot por artículo, tienda y día. Para no generar millones de filas
+# (5000 artículos x 150 tiendas x 393 días = 295 M), se toma una muestra de artículos.
+# ------------------------------------------------------------
+inventario:
+  articulos_muestra: 20            # 20 x 150 tiendas x 393 días ≈ 1.18 M filas (mínimo: 750.000)
+
+# ------------------------------------------------------------
+# Devoluciones
+# ------------------------------------------------------------
+devoluciones:
+  pct_lineas_devueltas: 0.05       # 5% de ~1.12 M líneas ≈ 56.000 devoluciones (mínimo: 50.000)
+  dias_max_despues_venta: 30
+  motivos:                         # código: descripción
+    DEF: producto defectuoso
+    TAL: talla o medida incorrecta
+    ARR: arrepentimiento
+    ERR: error en el pedido
+    DAN: dañado en el envío
+  estados: [aprobada, rechazada, en_revision]
+
+# ------------------------------------------------------------
+# Calidad de datos: suciedad "normal" del sistema legado
+# ------------------------------------------------------------
+calidad:
+  pct_nulos: 0.05                  # ~5% de nulos en columnas opcionales
+
+# ------------------------------------------------------------
+# Anomalías intencionales: Silver debe detectarlas.
+# La prueba pide al menos 3.
+# ------------------------------------------------------------
+anomalias:
+  ventas_qty_invalida: 0.002       # cantidad 0 o negativa
+  ventas_duplicadas: 0.003         # la misma línea repetida (mismo id_trans y art_id)
+  ventas_articulo_huerfano: 0.001  # art_id que no existe en MSTR_ARTICULOS
+  devolucion_mayor_a_venta: 0.01   # qty_devuelta > qty_vendida de la venta original
+  dia_volumen_anomalo:             # un día con caída brusca, para probar la alerta de volumen
+    fecha: "2026-08-15"
+    factor: 0.15                   # ese día se vende solo el 15% de lo normal
+
+# ------------------------------------------------------------
+# Salida
+# ------------------------------------------------------------
+salida:
+  carpeta: output
+  csv: [MSTR_PROVEEDORES, MSTR_ARTICULOS, MSTR_TIENDAS, CRM_MIEMBROS, POST_DEVOLUCIONES]
+  parquet: [TRANS_VENTAS, INV_STOCK_DIARIO, TRAF_VISITAS]

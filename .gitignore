@@ -1,0 +1,44 @@
+# Secretos y variables locales
+.env
+*.env
+!.env.example
+
+# Terraform: estado y archivos locales (el estado vive en el backend remoto)
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Datos generados (pueden pesar cientos de MB; se regeneran con la semilla)
+generacion-datos/output/
+
+# Lago de datos local (se regenera ejecutando el pipeline)
+ambiente-local/lake/
+
+# Azure Functions local
+local.settings.json
+
+# Notas personales de trabajo
+NOTAS_README.md
+
+# Editores / SO
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
