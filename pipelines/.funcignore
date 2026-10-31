@@ -1,0 +1,7 @@
+# Archivos que NO se suben a Azure Functions
+__pycache__/
+*.pyc
+run_local.py
+verificar_bronze.py
+generar_catalogo.py
+local.settings.json

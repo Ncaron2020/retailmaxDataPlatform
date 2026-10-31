@@ -1,0 +1,48 @@
+# Despliegue continuo del código del pipeline (Bronze, Silver, Gold, calidad, notificaciones)
+# a la Function App de dev, cada vez que cambia pipelines/ en la rama develop.
+#
+# Autenticación con OIDC: GitHub obtiene un token temporal de Azure; no hay secretos de larga duración.
+# Requiere en el repositorio (Settings > Secrets and variables > Actions):
+#   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID  (identificadores, no contraseñas)
+name: Deploy pipelines (dev)
+
+on:
+  push:
+    branches: [develop]
+    paths: ["pipelines/**"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # necesario para OIDC
+  contents: read
+
+concurrency:
+  group: deploy-pipelines-dev
+  cancel-in-progress: false
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      GRUPO_RECURSOS: rg-retailmax-dev
+      FUNCTION_APP: func-retailmax-dev-4fr8
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Empaquetar el código
+        working-directory: pipelines
+        run: zip -r ../pipelines.zip . -x "__pycache__/*" "*/__pycache__/*" run_local.py verificar_bronze.py generar_catalogo.py
+
+      - name: Iniciar sesión en Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Desplegar en la Function App (build remoto)
+        run: |
+          az functionapp deployment source config-zip \
+            -g "$GRUPO_RECURSOS" -n "$FUNCTION_APP" --src pipelines.zip --build-remote true
+          az functionapp function list -g "$GRUPO_RECURSOS" -n "$FUNCTION_APP" --query "[].name" -o tsv

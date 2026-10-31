@@ -16,6 +16,11 @@ terraform {
       source  = "azure/azapi"
       version = "~> 2.5"
     }
+    # azuread: grupos de Entra ID para los roles del proyecto (administrador, ingeniero, analista)
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 3.4"
+    }
   }
 
   # Estado remoto en un Storage Account dedicado (creado por bootstrap/crear-backend.sh).
@@ -25,6 +30,8 @@ terraform {
 }
 
 provider "azapi" {}
+
+provider "azuread" {}
 
 provider "azurerm" {
   # Si es null, se toma de la variable de entorno ARM_SUBSCRIPTION_ID

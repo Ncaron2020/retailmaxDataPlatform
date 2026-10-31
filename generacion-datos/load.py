@@ -13,7 +13,7 @@ Uso:
 
     # Ejecutar scripts SQL (separados por GO) antes de cargar, o sin cargar:
     python load.py --target azure --sql sql/ddl/01_create_tables.sql --sin-carga
-    python load.py --target azure --sql ../infra/sql/permisos_origen.sql --var ADF_NOMBRE=adf-xxx --sin-carga
+    python load.py --target azure --sql ../infra/sql/permisos_origen.sql --var IDENTIDAD=adf-xxx --sin-carga
 
 Cada tabla se vacía (TRUNCATE) antes de cargar, así que se puede ejecutar varias veces
 sin duplicar datos. Al final compara COUNT(*) de cada tabla contra las filas del archivo.
@@ -70,7 +70,9 @@ def conectar(target: str) -> pyodbc.Connection:
     token_struct = struct.pack(f"<I{len(token_bytes)}s", len(token_bytes), token_bytes)
     SQL_COPT_SS_ACCESS_TOKEN = 1256                    # atributo ODBC para autenticación por token
     cadena = f"DRIVER={{{DRIVER}}};SERVER=tcp:{servidor},1433;DATABASE={base};Encrypt=yes;TrustServerCertificate=no;"
-    return pyodbc.connect(cadena, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct}, autocommit=False)
+    # timeout alto: la base serverless se pausa sin uso y tarda ~1 min en despertar
+    return pyodbc.connect(cadena, attrs_before={SQL_COPT_SS_ACCESS_TOKEN: token_struct}, autocommit=False,
+                          timeout=180)
 
 
 def ejecutar_script(conn: pyodbc.Connection, ruta: Path, variables: dict[str, str]) -> None:

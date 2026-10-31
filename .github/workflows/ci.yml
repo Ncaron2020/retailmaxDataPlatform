@@ -1,0 +1,45 @@
+# Integración continua: valida el código en cada push y pull request. No necesita credenciales de Azure.
+name: CI
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python (pipelines y generador)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Instalar dependencias
+        run: pip install -r pipelines/requirements.txt -r generacion-datos/requirements.txt
+      - name: Compilar todo el código (errores de sintaxis)
+        run: python -m compileall -q pipelines generacion-datos
+      - name: Generar datos y validar volúmenes mínimos del PDF
+        working-directory: generacion-datos
+        run: python generate.py
+
+  terraform:
+    name: Terraform (formato y validación)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Formato
+        run: terraform fmt -check -recursive
+      - name: Validación (sin backend remoto)
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate

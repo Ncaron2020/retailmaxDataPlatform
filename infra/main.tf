@@ -22,6 +22,13 @@ locals {
     sql_database   = "sqldb-${local.proyecto}-${var.ambiente}"
     log_analytics  = "log-${local.proyecto}-${var.ambiente}"
     data_factory   = "adf-${local.proyecto}-${var.ambiente}-${local.sufijo}"
+    storage_fn     = "stfn${local.proyecto}${var.ambiente}${local.sufijo}" # almacenamiento interno de la Function
+    plan_fn        = "asp-${local.proyecto}-${var.ambiente}"
+    function_app   = "func-${local.proyecto}-${var.ambiente}-${local.sufijo}"
+    app_insights   = "appi-${local.proyecto}-${var.ambiente}"
+    comunicacion   = "acs-${local.proyecto}-${var.ambiente}-${local.sufijo}"
+    correo         = "ecs-${local.proyecto}-${var.ambiente}-${local.sufijo}"
+    grupo_accion   = "ag-${local.proyecto}-${var.ambiente}"
   }
 
   etiquetas = merge({

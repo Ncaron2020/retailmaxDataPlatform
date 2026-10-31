@@ -44,6 +44,23 @@ variable "retencion_logs_dias" {
   default     = 30
 }
 
+variable "correo_alertas" {
+  description = "Correo que recibe el resumen diario y las alertas. Se pasa al desplegar (-var o secreto de CI), no se versiona."
+  type        = string
+}
+
+variable "adf_hora_ejecucion" {
+  description = "Hora (0-23, hora de Bogotá) de la ejecución diaria del pipeline."
+  type        = number
+  default     = 2
+}
+
+variable "adf_minuto_ejecucion" {
+  description = "Minuto de la ejecución diaria del pipeline."
+  type        = number
+  default     = 0
+}
+
 variable "etiquetas" {
   description = "Etiquetas adicionales para todos los recursos."
   type        = map(string)

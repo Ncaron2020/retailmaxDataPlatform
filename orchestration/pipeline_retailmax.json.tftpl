@@ -1,0 +1,221 @@
+[
+  {
+    "name": "Despertar_BD",
+    "description": "La base serverless se pausa sin uso. Una consulta mínima la despierta antes de Bronze; si aún no responde, Data Factory reintenta.",
+    "type": "Script",
+    "linkedServiceName": {
+      "referenceName": "${ls_sql}",
+      "type": "LinkedServiceReference"
+    },
+    "policy": {
+      "timeout": "0.00:05:00",
+      "retry": 5,
+      "retryIntervalInSeconds": 60
+    },
+    "typeProperties": {
+      "scripts": [
+        {
+          "type": "Query",
+          "text": "SELECT 1 AS base_despierta"
+        }
+      ]
+    }
+  },
+  {
+    "name": "Bronze",
+    "description": "Ingesta incremental de las 8 tablas al lago (Parquet, partición por fecha), con validación de volumen: alerta si difiere más de 30 % del promedio de las últimas 7 ejecuciones.",
+    "type": "AzureFunctionActivity",
+    "dependsOn": [
+      {
+        "activity": "Despertar_BD",
+        "dependencyConditions": [
+          "Succeeded"
+        ]
+      }
+    ],
+    "linkedServiceName": {
+      "referenceName": "${ls_funcion}",
+      "type": "LinkedServiceReference"
+    },
+    "policy": {
+      "timeout": "0.00:10:00",
+      "retry": 3,
+      "retryIntervalInSeconds": 60
+    },
+    "typeProperties": {
+      "functionName": "capas/bronze",
+      "method": "POST",
+      "body": {
+        "value": "@json(concat('{\"lote\":\"', pipeline().RunId, '\"', if(empty(pipeline().parameters.tablas_bronze), '', concat(',\"tablas\":', pipeline().parameters.tablas_bronze)), if(empty(pipeline().parameters.fecha_corte), '', concat(',\"fecha_corte\":\"', pipeline().parameters.fecha_corte, '\"')), '}'))",
+        "type": "Expression"
+      }
+    }
+  },
+  {
+    "name": "Silver",
+    "description": "Limpieza, estandarización, integridad referencial, hash de PII y reporte de calidad.",
+    "type": "AzureFunctionActivity",
+    "dependsOn": [
+      {
+        "activity": "Bronze",
+        "dependencyConditions": [
+          "Succeeded"
+        ]
+      }
+    ],
+    "linkedServiceName": {
+      "referenceName": "${ls_funcion}",
+      "type": "LinkedServiceReference"
+    },
+    "policy": {
+      "timeout": "0.00:10:00",
+      "retry": 3,
+      "retryIntervalInSeconds": 60
+    },
+    "typeProperties": {
+      "functionName": "capas/silver",
+      "method": "POST",
+      "body": {
+        "value": "@json(concat('{\"lote\":\"', pipeline().RunId, '\"}'))",
+        "type": "Expression"
+      }
+    }
+  },
+  {
+    "name": "Gold",
+    "description": "Modelo dimensional, reglas de negocio y tablas de KPIs.",
+    "type": "AzureFunctionActivity",
+    "dependsOn": [
+      {
+        "activity": "Silver",
+        "dependencyConditions": [
+          "Succeeded"
+        ]
+      }
+    ],
+    "linkedServiceName": {
+      "referenceName": "${ls_funcion}",
+      "type": "LinkedServiceReference"
+    },
+    "policy": {
+      "timeout": "0.00:10:00",
+      "retry": 3,
+      "retryIntervalInSeconds": 60
+    },
+    "typeProperties": {
+      "functionName": "capas/gold",
+      "method": "POST",
+      "body": {
+        "value": "@json(concat('{\"lote\":\"', pipeline().RunId, '\"}'))",
+        "type": "Expression"
+      }
+    }
+  },
+  {
+    "name": "Calidad",
+    "description": "Pruebas automatizadas de calidad sobre Gold (unicidad, completitud, integridad, rangos, volumen, RFM).",
+    "type": "AzureFunctionActivity",
+    "dependsOn": [
+      {
+        "activity": "Gold",
+        "dependencyConditions": [
+          "Succeeded"
+        ]
+      }
+    ],
+    "linkedServiceName": {
+      "referenceName": "${ls_funcion}",
+      "type": "LinkedServiceReference"
+    },
+    "policy": {
+      "timeout": "0.00:10:00",
+      "retry": 0
+    },
+    "typeProperties": {
+      "functionName": "capas/calidad",
+      "method": "POST",
+      "body": {
+        "value": "@json(concat('{\"lote\":\"', pipeline().RunId, '\"}'))",
+        "type": "Expression"
+      }
+    }
+  },
+  {
+    "name": "Notificar_Exito",
+    "description": "Correo de resumen diario: tablas, filas, pruebas de calidad.",
+    "type": "AzureFunctionActivity",
+    "dependsOn": [
+      {
+        "activity": "Calidad",
+        "dependencyConditions": [
+          "Succeeded"
+        ]
+      }
+    ],
+    "linkedServiceName": {
+      "referenceName": "${ls_funcion}",
+      "type": "LinkedServiceReference"
+    },
+    "policy": {
+      "timeout": "0.00:05:00",
+      "retry": 1,
+      "retryIntervalInSeconds": 60
+    },
+    "typeProperties": {
+      "functionName": "notificar",
+      "method": "POST",
+      "body": {
+        "value": "@json(concat('{\"lote\":\"', pipeline().RunId, '\",\"estado\":\"exito\",\"pipeline\":\"', pipeline().Pipeline, '\",\"inicio\":\"', formatDateTime(pipeline().TriggerTime, 'yyyy-MM-ddTHH:mm:ssZ'), '\"}'))",
+        "type": "Expression"
+      }
+    }
+  },
+  {
+    "name": "Notificar_Fallo",
+    "description": "Si cualquier paso falla, los siguientes quedan omitidos y Calidad no termina bien: se envía el correo de fallo con el detalle.",
+    "type": "AzureFunctionActivity",
+    "dependsOn": [
+      {
+        "activity": "Calidad",
+        "dependencyConditions": [
+          "Failed",
+          "Skipped"
+        ]
+      }
+    ],
+    "linkedServiceName": {
+      "referenceName": "${ls_funcion}",
+      "type": "LinkedServiceReference"
+    },
+    "policy": {
+      "timeout": "0.00:05:00",
+      "retry": 1,
+      "retryIntervalInSeconds": 60
+    },
+    "typeProperties": {
+      "functionName": "notificar",
+      "method": "POST",
+      "body": {
+        "value": "@json(concat('{\"lote\":\"', pipeline().RunId, '\",\"estado\":\"fallo\",\"pipeline\":\"', pipeline().Pipeline, '\",\"inicio\":\"', formatDateTime(pipeline().TriggerTime, 'yyyy-MM-ddTHH:mm:ssZ'), '\"}'))",
+        "type": "Expression"
+      }
+    }
+  },
+  {
+    "name": "Marcar_Fallo",
+    "description": "Deja la ejecución en estado Fallido después de notificar, para que el historial y la alerta de Azure Monitor lo reflejen.",
+    "type": "Fail",
+    "dependsOn": [
+      {
+        "activity": "Notificar_Fallo",
+        "dependencyConditions": [
+          "Completed"
+        ]
+      }
+    ],
+    "typeProperties": {
+      "message": "El pipeline RetailMax falló. Ver correo de notificación y monitor de Data Factory.",
+      "errorCode": "RETAILMAX_PIPELINE_FALLIDO"
+    }
+  }
+]

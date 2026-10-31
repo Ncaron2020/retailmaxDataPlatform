@@ -35,6 +35,7 @@ local.settings.json
 
 # Notas personales de trabajo
 NOTAS_README.md
+README_EXAMPLE.md
 
 # Editores / SO
 .vscode/*

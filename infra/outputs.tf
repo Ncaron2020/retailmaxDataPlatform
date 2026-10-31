@@ -40,6 +40,14 @@ output "data_factory_identidad" {
   value       = azurerm_data_factory.orquestador.identity[0].principal_id
 }
 
+output "function_app" {
+  value = azurerm_function_app_flex_consumption.pipeline.name
+}
+
+output "function_app_url" {
+  value = "https://${azurerm_function_app_flex_consumption.pipeline.default_hostname}"
+}
+
 output "log_analytics" {
   value = azurerm_log_analytics_workspace.logs.name
 }
