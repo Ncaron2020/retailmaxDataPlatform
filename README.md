@@ -483,7 +483,10 @@ mejora: una prueba unitaria del asunto de cada correo lo habría detectado antes
   fecha de registro como cuasi-identificadores. Visible en el portal (Data Discovery & Classification).
 - **Despliegue con OIDC.** GitHub Actions entra a Azure con la identidad `gh-retailmax-deploy-dev`, que
   no tiene contraseña: Azure solo acepta tokens firmados por GitHub para este repositorio y el ambiente
-  `dev`. Su único permiso es Website Contributor sobre la Function.
+  `dev`. Su único permiso es Website Contributor sobre la Function. En el primer despliegue el login falló
+  (`AADSTS700213`): GitHub envía el *subject* con los IDs numéricos del usuario y del repositorio
+  (`repo:Ncaron2020@121366368/retailmaxDataPlatform@1438011609:environment:dev`) y la credencial se había
+  registrado solo con los nombres. Se registró con el formato exacto y el despliegue quedó en verde.
 - **Empaquetado del despliegue.** Un zip creado con `Compress-Archive` de PowerShell 5.1 guarda las rutas
   con `\`; en el Linux de la Function las carpetas no se reconocen y el despliegue responde "exitoso"
   pero la Function queda sin funciones. Se empaqueta con rutas `/` (en GitHub Actions, con `zip` de

@@ -89,7 +89,7 @@ Requiere configurar OIDC una vez (identidad de GitHub en Entra ID, sin contrase�
 ```powershell
 $appId = az ad app create --display-name "gh-retailmax-deploy-dev" --query appId -o tsv
 az ad sp create --id $appId
-'{"name":"github-dev","issuer":"https://token.actions.githubusercontent.com","subject":"repo:<usuario>/<repo>:environment:dev","audiences":["api://AzureADTokenExchange"]}' | Out-File -Encoding ascii "$env:TEMP\fed-cred.json"
+'{"name":"github-dev","issuer":"https://token.actions.githubusercontent.com","subject":"repo:<usuario>@<id_usuario>/<repo>@<id_repo>:environment:dev","audiences":["api://AzureADTokenExchange"]}' | Out-File -Encoding ascii "$env:TEMP\fed-cred.json"
 az ad app federated-credential create --id $appId --parameters "$env:TEMP\fed-cred.json"
 $funcId = az functionapp show -g <grupo_recursos> -n <function_app> --query id -o tsv
 az role assignment create --assignee $appId --role "Website Contributor" --scope $funcId
@@ -97,6 +97,12 @@ az role assignment create --assignee $appId --role "Website Contributor" --scope
 Luego, en GitHub (*Settings → Secrets and variables → Actions*), crear `AZURE_CLIENT_ID` (`$appId`),
 `AZURE_TENANT_ID` y `AZURE_SUBSCRIPTION_ID` (`az account show`). Son identificadores, no contraseñas.
 El permiso es solo sobre la Function: esta identidad no puede tocar el lago, la base ni el Key Vault.
+
+**Formato del subject:** GitHub incluye los IDs numéricos del usuario y del repositorio
+(`repo:Ncaron2020@121366368/retailmaxDataPlatform@1438011609:environment:dev`), para que un repositorio
+borrado y recreado con el mismo nombre no pueda suplantar al original. Azure exige que coincida exacto:
+si el login falla con `AADSTS700213: No matching federated identity record`, copiar el *subject claim*
+que muestra el log del workflow y registrarlo tal cual.
 
 Manualmente:
 ```powershell

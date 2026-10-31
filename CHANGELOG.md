@@ -7,6 +7,8 @@ Historial de cambios significativos del proyecto. Formato: fecha, autor y descri
 ### Despliegue continuo, ajustes de operación y evidencias (tarde)
 - Despliegue del código con GitHub Actions y OIDC: identidad `gh-retailmax-deploy-dev` sin contraseña,
   con permiso solo sobre la Function App (Website Contributor). En GitHub solo se guardan identificadores.
+  Corrección: la credencial federada debe usar el subject con los IDs numéricos del usuario y del
+  repositorio, que es el formato que envía GitHub. Primer despliegue automático exitoso.
 - Corrección del empaquetado: un zip creado con `Compress-Archive` (PowerShell 5.1) guarda rutas con `\`
   y la Function quedaba sin funciones aunque el despliegue respondía OK. Se empaqueta con rutas `/` y se
   verifica con `az functionapp function list` después de desplegar.
