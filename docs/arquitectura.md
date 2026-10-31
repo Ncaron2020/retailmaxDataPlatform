@@ -1,6 +1,7 @@
 # Arquitectura de la solución: RetailMax Data Pipeline
 
 > Escenario B: Retail y comercio electrónico. Plataforma: Microsoft Azure.
+> Diagramas hechos en draw.io; las fuentes editables (`.drawio`) están en [img/](img/).
 > Decisión de plataforma y motor: ver [ADR-001](decisiones/ADR-001-plataforma-y-motor-de-procesamiento.md).
 
 ---
@@ -25,58 +26,9 @@ RetailMax no tiene visibilidad oportuna de su operación. El inventario se revis
 
 La solución sigue un estilo **Lakehouse** organizado en capas de plataforma. La **arquitectura medallón** (bronze / silver / gold) no es una capa más: es **la forma en que se organizan los datos dentro de la capa de almacenamiento**. La capa de procesamiento es la que **promueve** los datos de una capa medallón a la siguiente.
 
-```mermaid
-flowchart LR
-    subgraph L1["1. Origen"]
-        GEN["Generador Python<br/>(semilla + config.yaml)"]
-        SQL[("Azure SQL Database<br/>RetailMax")]
-        GEN -->|CSV / Parquet| SQL
-    end
+![Capas de la plataforma](img/arquitectura-capas.png)
 
-    subgraph L2["2. Ingesta"]
-        FB["fn bronze<br/>extracción incremental"]
-    end
-
-    subgraph L4["4. Procesamiento"]
-        FS["fn silver<br/>limpieza + calidad"]
-        FG["fn gold<br/>reglas de negocio"]
-        FQ["fn calidad<br/>pruebas"]
-    end
-
-    subgraph L3["3. Almacenamiento: ADLS Gen2 + Delta Lake"]
-        subgraph MED["Arquitectura medallón"]
-            B[("bronze<br/>crudo")]
-            S[("silver<br/>limpio")]
-            G[("gold<br/>negocio")]
-        end
-        OPS[("ops<br/>logs, errores,<br/>marcas de agua")]
-    end
-
-    subgraph L6["6. Consumo"]
-        BI["Analistas<br/>Power BI / SQL<br/>(solo lectura de gold)"]
-    end
-
-    SQL -->|solo lectura| FB --> B
-    B --> FS --> S
-    S --> FG --> G
-    G --> FQ
-    FB & FS & FG & FQ -.-> OPS
-    G --> BI
-
-    subgraph L5["5. Orquestación"]
-        ADF["Azure Data Factory<br/>diario 02:00 (Bogotá)"]
-    end
-    ADF -.->|"dispara en orden"| FB & FS & FG & FQ
-```
-
-```mermaid
-flowchart LR
-    subgraph TRANS["Capas transversales (aplican a todas)"]
-        SEC["Seguridad<br/>Key Vault · identidades administradas · RBAC"]
-        OBS["Observabilidad<br/>Log Analytics · Azure Monitor · correos"]
-        CICD["Despliegue<br/>Terraform (infraestructura) · GitHub Actions + OIDC (código)"]
-    end
-```
+![Capas transversales](img/arquitectura-transversales.png)
 
 | # | Capa de plataforma | Responsabilidad | Servicio |
 |---|---|---|---|
@@ -114,44 +66,7 @@ flowchart LR
 
 ## 4. Flujo de datos por capa
 
-```mermaid
-flowchart TB
-    subgraph BRONZE["BRONZE - copia fiel"]
-        b1["Lee marca de agua (ops/marcas_agua)"]
-        b2["SELECT incremental desde Azure SQL<br/>solo días cerrados: marca < fecha < fecha_corte<br/>(maestros: copia completa)"]
-        b3["+ columnas de auditoría:<br/>_fecha_ingesta, _sistema_fuente, _id_lote"]
-        b4["Escribe Parquet particionado<br/>anio / mes / dia de ingesta"]
-        b5["Log: registros, tamaño, duración (ops/ejecuciones)"]
-        b6["Validación de volumen ±30 %<br/>(ops/alertas_volumen + correo)"]
-        b1 --> b2 --> b3 --> b4 --> b5 --> b6
-    end
-
-    subgraph SILVER["SILVER - limpio y confiable"]
-        s1["Tipos de datos estandarizados"]
-        s2["Elimina duplicados exactos"]
-        s3["Valida obligatorios e integridad referencial"]
-        s4["Rechazados -> ops/rechazos (con motivo)"]
-        s5["Estrategia de nulos por columna"]
-        s6["Hash con sal de datos personales"]
-        s7["Reporte de calidad (ops/calidad_silver)"]
-        s1 --> s2 --> s3 --> s4 --> s5 --> s6 --> s7
-    end
-
-    subgraph GOLD["GOLD - modelo dimensional + reglas"]
-        g1["Dimensiones: dim_productos, dim_tiendas, dim_clientes"]
-        g2["Hechos: fact_ventas, fact_inventario, fact_devoluciones, fact_rfm_clientes"]
-        g3["KPIs: kpi_ventas_diarias, kpi_top_articulos,<br/>kpi_tasa_devolucion, kpi_conversion_canal"]
-        g1 --> g2 --> g3
-    end
-
-    subgraph CALIDAD["CALIDAD - pruebas sobre gold"]
-        q1["6 pruebas: unicidad, completitud, integridad,<br/>rangos, volumen del último día, reglas RFM"]
-        q2["Resultado en ops/calidad_pruebas"]
-        q1 --> q2
-    end
-
-    BRONZE --> SILVER --> GOLD --> CALIDAD
-```
+![Flujo de datos por capa](img/arquitectura-flujo-capas.png)
 
 ### Tablas de operación (contenedor `ops`)
 
@@ -176,18 +91,7 @@ flowchart TB
 
 ## 5. Orquestación (Data Factory)
 
-```mermaid
-flowchart LR
-    T["Trigger diario<br/>02:00 Bogotá<br/>o manual"] --> D["Despertar_BD<br/>(base serverless)"]
-    D --> V["Bronze<br/>+ validación de volumen"]
-    V -.->|"volumen ±30% vs<br/>promedio 7 ejecuciones"| AV["Correo: anomalía<br/>(continúa)"]
-    V -->|"OK"| SV["Silver"]
-    SV -->|"OK"| GD["Gold"]
-    GD -->|"OK"| DQ["Calidad"]
-    DQ -->|"OK"| OK["Notificar_Exito<br/>correo: reporte diario"]
-    V & SV & GD & DQ -->|"falla"| KO["Notificar_Fallo<br/>correo: tarea, capa, hora, error"]
-    KO --> MF["Marcar_Fallo<br/>ejecución en rojo → alerta de Azure Monitor"]
-```
+![Orquestación en Data Factory](img/arquitectura-orquestacion.png)
 
 | Requisito | Implementación |
 |---|---|
